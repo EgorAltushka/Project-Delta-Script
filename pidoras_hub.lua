@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
@@ -16,10 +17,9 @@ _G.PidorasSettings = {
     FullbrightEnabled = false, OptimizerEnabled = false,
     TargetFOV = 70,
     AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0, AimbotWallcheck = true, AimbotHitbox = "Head", AimbotMaxDist = 500,
-    TriggerbotEnabled = false,
-    TriggerIgnoreNPCs = true,
-    TriggerbotDelay = 0.4,
-    HitboxEnabled = false, HitboxSize = 5, PredictionEnabled = false
+    TriggerbotEnabled = false, TriggerIgnoreNPCs = true, TriggerbotDelay = 0.4,
+    HitboxEnabled = false, HitboxSize = 5, PredictionEnabled = false,
+    NoRecoilEnabled = false
 }
 
 local activeHighlights, activeNameESPs, activeHealthBars, activeItemESPs, activeExtractionESPs, activeBotESPs, activeCorpseESPs = {}, {}, {}, {}, {}, {}, {}
@@ -27,6 +27,8 @@ local originalLightingSettings = {}
 local itemESPConnection = nil
 local hitboxConnection = nil
 local originalHitboxSizes = {}
+
+local OldRecoilValues = {}
 
 local ReadableNames = {
     ["AKMN"] = "AKMN", ["M4A1"] = "M4A1", ["FAL"] = "FAL", ["Saiga-12"] = "Saiga-12",
@@ -55,7 +57,7 @@ local MainStroke = Instance.new("UIStroke"); MainStroke.Color = Color3.fromRGB(8
 
 local TopBar = Instance.new("Frame"); TopBar.Size = UDim2.new(1, 0, 0, 35); TopBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TopBar.Parent = MainFrame
 local TopBarCorner = Instance.new("UICorner"); TopBarCorner.CornerRadius = UDim.new(0, 6); TopBarCorner.Parent = TopBar
-local Title = Instance.new("TextLabel"); Title.Size = UDim2.new(1, -80, 1, 0); Title.Position = UDim2.new(0, 15, 0, 0); Title.BackgroundTransparency = 1; Title.Text = "Pidoras hub"; Title.TextColor3 = Color3.fromRGB(200, 200, 200); Title.Font = Enum.Font.GothamBold; Title.TextSize = 13; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.Parent = TopBar
+local Title = Instance.new("TextLabel"); Title.Size = UDim2.new(1, -80, 1, 0); Title.Position = UDim2.new(0, 15, 0, 0); Title.BackgroundTransparency = 1; Title.Text = "Delta Hub"; Title.TextColor3 = Color3.fromRGB(200, 200, 200); Title.Font = Enum.Font.GothamBold; Title.TextSize = 13; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.Parent = TopBar
 
 local MinimizeBtn = Instance.new("TextButton"); MinimizeBtn.Size = UDim2.new(0, 25, 0, 25); MinimizeBtn.Position = UDim2.new(1, -60, 0, 5); MinimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50); MinimizeBtn.Text = "—"; MinimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 200); MinimizeBtn.Font = Enum.Font.GothamBold; MinimizeBtn.Parent = TopBar
 local CloseBtn = Instance.new("TextButton"); CloseBtn.Size = UDim2.new(0, 25, 0, 25); CloseBtn.Position = UDim2.new(1, -30, 0, 5); CloseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80); CloseBtn.Text = "X"; CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255); CloseBtn.Font = Enum.Font.GothamBold; CloseBtn.Parent = TopBar
@@ -98,7 +100,15 @@ local function CreateSlider(parent, text, yPos, minVal, maxVal, defaultVal, call
     local dragging = false
     Bg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
     UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
-    UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local relX = math.clamp((UserInputService:GetMouseLocation().X - Bg.AbsolutePosition.X) / Bg.AbsoluteSize.X, 0, 1); Fill.Size = UDim2.new(relX, 0, 1, 0); Knob.Position = UDim2.new(relX, -6, 0.5, -6); local val = math.floor((minVal + (relX * (maxVal - minVal))) * 10) / 10; Label.Text = text .. ": " .. val; callback(val) end end)
+    UserInputService.InputChanged:Connect(function(input) 
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
+            local relX = math.clamp((UserInputService:GetMouseLocation().X - Bg.AbsolutePosition.X) / Bg.AbsoluteSize.X, 0, 1)
+            Fill.Size = UDim2.new(relX, 0, 1, 0); Knob.Position = UDim2.new(relX, -6, 0.5, -6)
+            local val = math.floor((minVal + (relX * (maxVal - minVal))) * 10) / 10
+            Label.Text = text .. ": " .. val
+            callback(val) 
+        end 
+    end)
 end
 
 local ScrollingFrame = Instance.new("ScrollingFrame"); ScrollingFrame.Size = UDim2.new(1, 0, 1, 0); ScrollingFrame.BackgroundTransparency = 1; ScrollingFrame.BorderSizePixel = 0; ScrollingFrame.ScrollBarThickness = 0; ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 700); ScrollingFrame.Parent = ContentFrame
@@ -144,6 +154,10 @@ CreateSection(CombatContent, "ADVANCED COMBAT", 381)
 CreateToggleRow(CombatContent, "Hitbox Expander", 401, false, function(state) _G.PidorasSettings.HitboxEnabled = state; if not state then RestoreHitboxes() end end)
 CreateSlider(CombatContent, "Hitbox Size", 434, 2, 10, 5, function(val) _G.PidorasSettings.HitboxSize = val end)
 CreateToggleRow(CombatContent, "Prediction (Упреждение)", 480, false, function(state) _G.PidorasSettings.PredictionEnabled = state end)
+CreateToggleRow(CombatContent, "No Recoil (Без отдачи)", 513, false, function(state) 
+    _G.PidorasSettings.NoRecoilEnabled = state
+    ToggleNoRecoil(state)
+end)
 
 local MiscContent = Instance.new("ScrollingFrame"); MiscContent.Size = UDim2.new(1, 0, 1, 0); MiscContent.BackgroundTransparency = 1; MiscContent.BorderSizePixel = 0; MiscContent.ScrollBarThickness = 0; MiscContent.CanvasSize = UDim2.new(0, 0, 0, 100); MiscContent.Visible = false; MiscContent.Parent = ContentFrame
 CreateToggleRow(MiscContent, "Optimizer (FPS Boost)", 5, false, function(state) _G.PidorasSettings.OptimizerEnabled = state; ToggleOptimizer(state) end)
@@ -172,10 +186,10 @@ CopyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-local Watermark = Instance.new("TextLabel"); Watermark.Size = UDim2.new(0, 200, 0, 30); Watermark.Position = UDim2.new(0, 10, 0, 10); Watermark.BackgroundColor3 = Color3.fromRGB(20, 20, 20); Watermark.BackgroundTransparency = 0.4; Watermark.Text = "Pidoras hub | FPS: 0"; Watermark.TextColor3 = Color3.fromRGB(255, 255, 255); Watermark.Font = Enum.Font.GothamBold; Watermark.TextSize = 14; Watermark.TextYAlignment = Enum.TextYAlignment.Center; Watermark.TextStrokeTransparency = 0; Watermark.Visible = false; Watermark.Parent = ScreenGui
+local Watermark = Instance.new("TextLabel"); Watermark.Size = UDim2.new(0, 200, 0, 30); Watermark.Position = UDim2.new(0, 10, 0, 10); Watermark.BackgroundColor3 = Color3.fromRGB(20, 20, 20); Watermark.BackgroundTransparency = 0.4; Watermark.Text = "Delta Hub | FPS: 0"; Watermark.TextColor3 = Color3.fromRGB(255, 255, 255); Watermark.Font = Enum.Font.GothamBold; Watermark.TextSize = 14; Watermark.TextYAlignment = Enum.TextYAlignment.Center; Watermark.TextStrokeTransparency = 0; Watermark.Visible = false; Watermark.Parent = ScreenGui
 local WmCorner = Instance.new("UICorner"); WmCorner.CornerRadius = UDim.new(0, 4); WmCorner.Parent = Watermark
 local WmStroke = Instance.new("UIStroke"); WmStroke.Color = Color3.fromRGB(80, 80, 80); WmStroke.Thickness = 1.5; WmStroke.Parent = Watermark
-task.spawn(function() while ScreenGui.Parent do Watermark.Text = string.format("Pidoras hub | FPS: %d", math.floor(1 / RunService.RenderStepped:Wait())) end end)
+task.spawn(function() while ScreenGui.Parent do Watermark.Text = string.format("Delta Hub | FPS: %d", math.floor(1 / RunService.RenderStepped:Wait())) end end)
 
 local dragging, dragStart, startPos = false, nil, nil
 TopBar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; dragStart = input.Position; startPos = MainFrame.Position; input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) end end)
@@ -359,18 +373,51 @@ local function FireWeapon()
     else
         if mouse1click then
             pcall(function() mouse1click() end)
-        else
-            pcall(function()
-                VirtualUser:Button1Down(Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2))
-                VirtualUser:Button1Up(Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2))
-            end)
         end
     end
 end
 
+-- ==========================================
+-- НОВАЯ ЛОГИКА NO RECOIL (через RecoilStrength)
+-- ==========================================
+local function ToggleNoRecoil(state)
+    local ammoFolder = ReplicatedStorage:FindFirstChild("AmmoTypes") or ReplicatedStorage:FindFirstChild("Ammo")
+    
+    if not ammoFolder then 
+        warn("Папка с патронами не найдена.")
+        return 
+    end
+
+    for _, ammo in ipairs(ammoFolder:GetChildren()) do
+        local currentAttr = ammo:GetAttribute("RecoilStrength")
+        
+        if currentAttr ~= nil then
+            if state then
+                if OldRecoilValues[ammo.Name] == nil then
+                    OldRecoilValues[ammo.Name] = currentAttr
+                end
+                ammo:SetAttribute("RecoilStrength", 0)
+            else
+                if OldRecoilValues[ammo.Name] ~= nil then
+                    ammo:SetAttribute("RecoilStrength", OldRecoilValues[ammo.Name])
+                end
+            end
+        end
+    end
+end
+
+-- Периодическая проверка на случай, если патроны подгружаются позже
+task.spawn(function()
+    while task.wait(2) do
+        if _G.PidorasSettings.NoRecoilEnabled then
+            ToggleNoRecoil(true)
+        end
+    end
+end)
+
 RunService.RenderStepped:Connect(function()
     if Camera.FieldOfView ~= _G.PidorasSettings.TargetFOV then Camera.FieldOfView = _G.PidorasSettings.TargetFOV end
-    
+
     if _G.PidorasSettings.AimbotEnabled then
         local target = GetClosestTarget()
         if target then
@@ -441,7 +488,7 @@ function ToggleOptimizer(state)
                 if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") then
                     originalLightingSettings[effect.Name] = effect.Enabled; effect.Enabled = false
                 elseif effect:IsA("Atmosphere") then
-                    originalLightingSettings.AtmosphereDensity = effect.Density; effect.Density = 0
+                    originalLightingSettings.AtomosphereDensity = effect.Density; effect.Density = 0
                 end
             end
             
@@ -473,6 +520,7 @@ MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; Wate
 Watermark.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Watermark.Visible = false; MainFrame.Visible = true; if _G.PidorasSettings.AimbotEnabled then FovCircle.Visible = true end end end)
 CloseBtn.MouseButton1Click:Connect(function() 
     for k, _ in pairs(_G.PidorasSettings) do _G.PidorasSettings[k] = false end
+    ToggleNoRecoil(false) -- Возвращаем отдачу
     RestoreHitboxes(); ClearHighlights(); ClearNameESPs(); ClearHealthBars(); ClearItemESPs(); ClearBotESPs(); ClearCorpseESPs(); ToggleFullbright(false); pcall(ToggleOptimizer, false); Camera.FieldOfView = 70
     TargetDot.Adornee = nil; TargetDot.Enabled = false
     ScreenGui:Destroy(); _G.PidorasSettings = nil 
