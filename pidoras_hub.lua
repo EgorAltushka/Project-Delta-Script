@@ -16,17 +16,15 @@ _G.PidorasSettings = {
     ItemContainers = false, ExtractionESPEnabled = false, BotESPEnabled = false,
     FullbrightEnabled = false, OptimizerEnabled = false,
     TargetFOV = 70,
-    AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0, AimbotWallcheck = true, AimbotHitbox = "Head", AimbotMaxDist = 500,
+    AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0, AimbotWallcheck = true, AimbotHitbox = "Head", AimbotMaxDist = 500, IgnoreTeammates = true,
     TriggerbotEnabled = false, TriggerIgnoreNPCs = true, TriggerbotDelay = 0.4,
-    HitboxEnabled = false, HitboxSize = 5, PredictionEnabled = false,
+    PredictionEnabled = false,
     NoRecoilEnabled = false
 }
 
 local activeHighlights, activeNameESPs, activeHealthBars, activeItemESPs, activeExtractionESPs, activeBotESPs, activeCorpseESPs = {}, {}, {}, {}, {}, {}, {}
 local originalLightingSettings = {}
 local itemESPConnection = nil
-local hitboxConnection = nil
-local originalHitboxSizes = {}
 
 local OldRecoilValues = {}
 
@@ -57,7 +55,7 @@ local MainStroke = Instance.new("UIStroke"); MainStroke.Color = Color3.fromRGB(8
 
 local TopBar = Instance.new("Frame"); TopBar.Size = UDim2.new(1, 0, 0, 35); TopBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TopBar.Parent = MainFrame
 local TopBarCorner = Instance.new("UICorner"); TopBarCorner.CornerRadius = UDim.new(0, 6); TopBarCorner.Parent = TopBar
-local Title = Instance.new("TextLabel"); Title.Size = UDim2.new(1, -80, 1, 0); Title.Position = UDim2.new(0, 15, 0, 0); Title.BackgroundTransparency = 1; Title.Text = "Delta Hub"; Title.TextColor3 = Color3.fromRGB(200, 200, 200); Title.Font = Enum.Font.GothamBold; Title.TextSize = 13; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.Parent = TopBar
+local Title = Instance.new("TextLabel"); Title.Size = UDim2.new(1, -80, 1, 0); Title.Position = UDim2.new(0, 15, 0, 0); Title.BackgroundTransparency = 1; Title.Text = "Pidoras hub"; Title.TextColor3 = Color3.fromRGB(200, 200, 200); Title.Font = Enum.Font.GothamBold; Title.TextSize = 13; Title.TextXAlignment = Enum.TextXAlignment.Left; Title.Parent = TopBar
 
 local MinimizeBtn = Instance.new("TextButton"); MinimizeBtn.Size = UDim2.new(0, 25, 0, 25); MinimizeBtn.Position = UDim2.new(1, -60, 0, 5); MinimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50); MinimizeBtn.Text = "—"; MinimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 200); MinimizeBtn.Font = Enum.Font.GothamBold; MinimizeBtn.Parent = TopBar
 local CloseBtn = Instance.new("TextButton"); CloseBtn.Size = UDim2.new(0, 25, 0, 25); CloseBtn.Position = UDim2.new(1, -30, 0, 5); CloseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80); CloseBtn.Text = "X"; CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255); CloseBtn.Font = Enum.Font.GothamBold; CloseBtn.Parent = TopBar
@@ -139,22 +137,16 @@ CreateToggleRow(CombatContent, "Aimbot", 25, false, function(state) _G.PidorasSe
 CreateToggleRow(CombatContent, "Triggerbot (Автострельба)", 58, false, function(state) _G.PidorasSettings.TriggerbotEnabled = state end)
 CreateToggleRow(CombatContent, "Ignore NPCs (Только игроки)", 91, true, function(state) _G.PidorasSettings.TriggerIgnoreNPCs = state end)
 CreateToggleRow(CombatContent, "Wallcheck", 124, false, function(state) _G.PidorasSettings.AimbotWallcheck = state end)
+CreateToggleRow(CombatContent, "Ignore Teammates (Не бить своих)", 157, true, function(state) _G.PidorasSettings.IgnoreTeammates = state end)
 
-CreateSlider(CombatContent, "Triggerbot Delay", 157, 0.1, 2.0, 0.4, function(val) _G.PidorasSettings.TriggerbotDelay = val end)
+CreateSlider(CombatContent, "Triggerbot Delay", 190, 0.1, 2.0, 0.4, function(val) _G.PidorasSettings.TriggerbotDelay = val end)
+CreateSlider(CombatContent, "Aimbot FOV", 236, 50, 500, 150, function(val) _G.PidorasSettings.AimbotFOV = val; FovCircle.Size = UDim2.new(0, val * 2, 0, val * 2) end)
+CreateSlider(CombatContent, "Smoothness (0 = Instant)", 282, 0, 10, 0, function(val) _G.PidorasSettings.AimbotSmooth = val end)
+CreateSlider(CombatContent, "Max Distance", 328, 50, 1000, 500, function(val) _G.PidorasSettings.AimbotMaxDist = val end)
 
-local HitboxBtn = Instance.new("TextButton"); HitboxBtn.Size = UDim2.new(1, 0, 0, 28); HitboxBtn.Position = UDim2.new(0, 0, 0, 210); HitboxBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); HitboxBtn.BackgroundTransparency = 0.01; HitboxBtn.Text = "Hitbox: Head"; HitboxBtn.TextColor3 = Color3.fromRGB(200, 200, 200); HitboxBtn.Font = Enum.Font.GothamMedium; HitboxBtn.TextSize = 12; HitboxBtn.Parent = CombatContent
-local HBtnCorner = Instance.new("UICorner"); HBtnCorner.CornerRadius = UDim.new(0, 4); HBtnCorner.Parent = HitboxBtn
-HitboxBtn.MouseButton1Click:Connect(function() if _G.PidorasSettings.AimbotHitbox == "Head" then _G.PidorasSettings.AimbotHitbox = "HumanoidRootPart"; HitboxBtn.Text = "Hitbox: Torso" else _G.PidorasSettings.AimbotHitbox = "Head"; HitboxBtn.Text = "Hitbox: Head" end end)
-
-CreateSlider(CombatContent, "Aimbot FOV", 243, 50, 500, 150, function(val) _G.PidorasSettings.AimbotFOV = val; FovCircle.Size = UDim2.new(0, val * 2, 0, val * 2) end)
-CreateSlider(CombatContent, "Smoothness (0 = Instant)", 289, 0, 10, 0, function(val) _G.PidorasSettings.AimbotSmooth = val end)
-CreateSlider(CombatContent, "Max Distance", 335, 50, 1000, 500, function(val) _G.PidorasSettings.AimbotMaxDist = val end)
-
-CreateSection(CombatContent, "ADVANCED COMBAT", 381)
-CreateToggleRow(CombatContent, "Hitbox Expander", 401, false, function(state) _G.PidorasSettings.HitboxEnabled = state; if not state then RestoreHitboxes() end end)
-CreateSlider(CombatContent, "Hitbox Size", 434, 2, 10, 5, function(val) _G.PidorasSettings.HitboxSize = val end)
-CreateToggleRow(CombatContent, "Prediction (Упреждение)", 480, false, function(state) _G.PidorasSettings.PredictionEnabled = state end)
-CreateToggleRow(CombatContent, "No Recoil (Без отдачи)", 513, false, function(state) 
+CreateSection(CombatContent, "ADVANCED COMBAT", 380)
+CreateToggleRow(CombatContent, "Prediction (Упреждение)", 400, false, function(state) _G.PidorasSettings.PredictionEnabled = state end)
+CreateToggleRow(CombatContent, "No Recoil (Без отдачи)", 433, false, function(state) 
     _G.PidorasSettings.NoRecoilEnabled = state
     ToggleNoRecoil(state)
 end)
@@ -186,10 +178,10 @@ CopyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-local Watermark = Instance.new("TextLabel"); Watermark.Size = UDim2.new(0, 200, 0, 30); Watermark.Position = UDim2.new(0, 10, 0, 10); Watermark.BackgroundColor3 = Color3.fromRGB(20, 20, 20); Watermark.BackgroundTransparency = 0.4; Watermark.Text = "Delta Hub | FPS: 0"; Watermark.TextColor3 = Color3.fromRGB(255, 255, 255); Watermark.Font = Enum.Font.GothamBold; Watermark.TextSize = 14; Watermark.TextYAlignment = Enum.TextYAlignment.Center; Watermark.TextStrokeTransparency = 0; Watermark.Visible = false; Watermark.Parent = ScreenGui
+local Watermark = Instance.new("TextLabel"); Watermark.Size = UDim2.new(0, 200, 0, 30); Watermark.Position = UDim2.new(0, 10, 0, 10); Watermark.BackgroundColor3 = Color3.fromRGB(20, 20, 20); Watermark.BackgroundTransparency = 0.4; Watermark.Text = "Pidoras hub | FPS: 0"; Watermark.TextColor3 = Color3.fromRGB(255, 255, 255); Watermark.Font = Enum.Font.GothamBold; Watermark.TextSize = 14; Watermark.TextYAlignment = Enum.TextYAlignment.Center; Watermark.TextStrokeTransparency = 0; Watermark.Visible = false; Watermark.Parent = ScreenGui
 local WmCorner = Instance.new("UICorner"); WmCorner.CornerRadius = UDim.new(0, 4); WmCorner.Parent = Watermark
 local WmStroke = Instance.new("UIStroke"); WmStroke.Color = Color3.fromRGB(80, 80, 80); WmStroke.Thickness = 1.5; WmStroke.Parent = Watermark
-task.spawn(function() while ScreenGui.Parent do Watermark.Text = string.format("Delta Hub | FPS: %d", math.floor(1 / RunService.RenderStepped:Wait())) end end)
+task.spawn(function() while ScreenGui.Parent do Watermark.Text = string.format("Pidoras hub | FPS: %d", math.floor(1 / RunService.RenderStepped:Wait())) end end)
 
 local dragging, dragStart, startPos = false, nil, nil
 TopBar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true; dragStart = input.Position; startPos = MainFrame.Position; input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) end end)
@@ -213,13 +205,93 @@ function ClearNameESPs() for p, g in pairs(activeNameESPs) do if g then g:Destro
 function ClearHealthBars() for p, g in pairs(activeHealthBars) do if g then g:Destroy() end activeHealthBars[p] = nil end end
 function ClearItemESPs() for obj, gui in pairs(activeItemESPs) do if gui then gui:Destroy() end activeItemESPs[obj] = nil end; for obj, gui in pairs(activeExtractionESPs) do if gui then gui:Destroy() end activeExtractionESPs[obj] = nil end end
 function ClearBotESPs() for obj, gui in pairs(activeBotESPs) do if gui then gui:Destroy() end activeBotESPs[obj] = nil end end
-function ClearCorpseESPs() for obj, gui in pairs(activeCorpseESPs) do if gui then gui:Destroy() end activeCorpseESPs[obj] = nil end end
+function ClearCorpseESPs() for obj, bb in pairs(activeCorpseESPs) do if bb then bb:Destroy() end if obj and obj:FindFirstChild("CorpseESP_HL") then obj.CorpseESP_HL:Destroy() end activeCorpseESPs[obj] = nil end end
 
 function StartChams() task.spawn(function() while _G.PidorasSettings.ChamsEnabled do for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer and plr.Character then if not activeHighlights[plr] or activeHighlights[plr].Parent ~= plr.Character then if activeHighlights[plr] then activeHighlights[plr]:Destroy() end local hl = Instance.new("Highlight"); hl.FillColor = Color3.fromRGB(255, 0, 0); hl.OutlineColor = Color3.fromRGB(255, 255, 255); hl.FillTransparency = 1; hl.Parent = plr.Character; activeHighlights[plr] = hl end end end task.wait(2) end end) end
 function StartNameESP() task.spawn(function() while _G.PidorasSettings.NameESPEnabled do local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer and plr.Character and myRoot then local head = plr.Character:FindFirstChild("Head"); local targetRoot = plr.Character:FindFirstChild("HumanoidRootPart"); if head and targetRoot then local dist = math.floor((myRoot.Position - targetRoot.Position).Magnitude); if not activeNameESPs[plr] or activeNameESPs[plr].Parent ~= head then if activeNameESPs[plr] then activeNameESPs[plr]:Destroy() end local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 120, 0, 25); bb.StudsOffset = Vector3.new(0, 2.5, 0); bb.AlwaysOnTop = true; bb.Parent = head; local txt = Instance.new("TextLabel"); txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextColor3 = Color3.fromRGB(255, 255, 255); txt.TextStrokeTransparency = 0; txt.Font = Enum.Font.GothamBold; txt.TextSize = 14; txt.Parent = bb; activeNameESPs[plr] = bb end; local txt = activeNameESPs[plr]:FindFirstChild("TextLabel"); if txt then txt.Text = plr.Name .. " [" .. dist .. "m]" end end end end task.wait(0.5) end end) end
 function StartHealthBars() task.spawn(function() while _G.PidorasSettings.HealthBarEnabled do local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer and plr.Character and myRoot then local hrp = plr.Character:FindFirstChild("HumanoidRootPart"); local hum = plr.Character:FindFirstChildOfClass("Humanoid"); if hrp and hum then local dist = (myRoot.Position - hrp.Position).Magnitude; local isVisible = dist <= 400; if not activeHealthBars[plr] or activeHealthBars[plr].Parent ~= hrp then if activeHealthBars[plr] then activeHealthBars[plr]:Destroy() end local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 6, 0, 40); bb.StudsOffset = Vector3.new(2.5, 0, 0); bb.AlwaysOnTop = true; bb.Parent = hrp; local bg = Instance.new("Frame"); bg.Size = UDim2.new(1, 0, 1, 0); bg.BackgroundColor3 = Color3.fromRGB(30, 30, 30); bg.BackgroundTransparency = 0.3; bg.Parent = bb; local bgStroke = Instance.new("UIStroke"); bgStroke.Color = Color3.fromRGB(0, 0, 0); bgStroke.Thickness = 1; bgStroke.Parent = bg; local fill = Instance.new("Frame"); fill.Name = "Fill"; fill.Size = UDim2.new(1, 0, 1, 0); fill.AnchorPoint = Vector2.new(0, 1); fill.Position = UDim2.new(0, 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(0, 255, 0); fill.Parent = bg; activeHealthBars[plr] = bb end; activeHealthBars[plr].Enabled = isVisible; if isVisible then local fill = activeHealthBars[plr]:FindFirstChild("Fill", true); if fill then local ratio = math.clamp(hum.Health / hum.MaxHealth, 0, 1); fill.Size = UDim2.new(1, 0, ratio, 0); if ratio > 0.6 then fill.BackgroundColor3 = Color3.fromRGB(0, 255, 0) elseif ratio > 0.3 then fill.BackgroundColor3 = Color3.fromRGB(255, 255, 0) else fill.BackgroundColor3 = Color3.fromRGB(255, 0, 0) end end end end end end task.wait(0.2) end end) end
 
-function StartCorpseESP() task.spawn(function() while _G.PidorasSettings.CorpseESPEnabled do for _, obj in ipairs(Workspace:GetChildren()) do if obj:IsA("Model") then local hum = obj:FindFirstChildOfClass("Humanoid"); local head = obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart"); if hum and hum.Health <= 0 and head then if not activeCorpseESPs[obj] or activeCorpseESPs[obj].Parent ~= head then if activeCorpseESPs[obj] then activeCorpseESPs[obj]:Destroy() end local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 200, 0, 50); bb.StudsOffset = Vector3.new(0, 3, 0); bb.AlwaysOnTop = true; bb.Parent = head; local txt = Instance.new("TextLabel"); txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.Text = "💀 ТРУП (" .. obj.Name .. ")"; txt.TextColor3 = Color3.fromRGB(255, 255, 0); txt.TextStrokeTransparency = 0; txt.Font = Enum.Font.GothamBold; txt.TextSize = 16; txt.Parent = bb; activeCorpseESPs[obj] = bb end end end end task.wait(1) end end) end
+function StartCorpseESP() 
+    task.spawn(function() 
+        while _G.PidorasSettings.CorpseESPEnabled do 
+            local count = 0
+            for _, obj in ipairs(Workspace:GetDescendants()) do 
+                count = count + 1
+                if count % 200 == 0 then task.wait() end
+                
+                -- Игнорируем собственного персонажа (защита от самоподсветки)
+                if obj == LocalPlayer.Character or (LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character)) then continue end
+                
+                if obj:IsA("Model") and not Players:GetPlayerFromCharacter(obj) then
+                    local hum = obj:FindFirstChildOfClass("Humanoid")
+                    
+                    -- Если есть Humanoid и он ЖИВОЙ — пропускаем
+                    if hum and hum.Health > 0 then continue end
+                    
+                    local isCorpse = false
+                    local foundPlayerName = nil
+                    
+                    -- Проверяем имя модели на совпадение с игроками в лобби (исключая себя)
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= LocalPlayer and string.find(obj.Name, plr.Name) then
+                            foundPlayerName = plr.Name
+                            break
+                        end
+                    end
+                    
+                    -- Если в имени модели нет ника, проверяем Humanoid (если он остался)
+                    if not foundPlayerName and hum then
+                        for _, plr in ipairs(Players:GetPlayers()) do
+                            if plr ~= LocalPlayer and (hum.DisplayName == plr.Name or hum.DisplayName == plr.DisplayName) then
+                                foundPlayerName = plr.Name
+                                break
+                            end
+                        end
+                    end
+
+                    if foundPlayerName then
+                        isCorpse = true
+                    end
+
+                    if isCorpse then
+                        local head = obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
+                        if head and not obj:FindFirstChild("CorpseESP_HL") then
+                            local hl = Instance.new("Highlight")
+                            hl.Name = "CorpseESP_HL"
+                            hl.FillColor = Color3.fromRGB(255, 50, 50)
+                            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                            hl.FillTransparency = 0.5
+                            hl.OutlineTransparency = 0
+                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            hl.Adornee = obj
+                            hl.Parent = obj
+                            
+                            local bb = Instance.new("BillboardGui")
+                            bb.Name = "CorpseESP_BB"
+                            bb.Size = UDim2.new(0, 200, 0, 50)
+                            bb.StudsOffset = Vector3.new(0, 3, 0)
+                            bb.AlwaysOnTop = true
+                            bb.Parent = head
+                            
+                            local txt = Instance.new("TextLabel")
+                            txt.Size = UDim2.new(1, 0, 1, 0)
+                            txt.BackgroundTransparency = 1
+                            txt.Text = "💀 " .. foundPlayerName
+                            txt.TextColor3 = Color3.fromRGB(255, 255, 0)
+                            txt.TextStrokeTransparency = 0
+                            txt.Font = Enum.Font.GothamBold
+                            txt.TextSize = 16
+                            txt.Parent = bb
+                            
+                            activeCorpseESPs[obj] = bb
+                        end
+                    end
+                end
+            end
+            task.wait(1.5) 
+        end
+    end) 
+end
 
 function StartBotESP() task.spawn(function() while _G.PidorasSettings.BotESPEnabled do for _, obj in ipairs(Workspace:GetChildren()) do if obj:IsA("Model") and not Players:GetPlayerFromCharacter(obj) then local hum = obj:FindFirstChildOfClass("Humanoid"); local head = obj:FindFirstChild("Head"); if hum and hum.Health > 0 and head then if not activeBotESPs[obj] or activeBotESPs[obj].Parent ~= head then if activeBotESPs[obj] then activeBotESPs[obj]:Destroy() end local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 100, 0, 25); bb.StudsOffset = Vector3.new(0, 2.5, 0); bb.AlwaysOnTop = true; bb.Parent = head; local txt = Instance.new("TextLabel"); txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.Text = "🤖 БОТ (" .. obj.Name .. ")"; txt.TextColor3 = Color3.fromRGB(255, 150, 50); txt.TextStrokeTransparency = 0; txt.Font = Enum.Font.GothamBold; txt.TextSize = 14; txt.Parent = bb; activeBotESPs[obj] = bb end end end end task.wait(1) end end) end
 
@@ -281,30 +353,12 @@ function UpdateItemESP()
     end 
 end
 
-function RestoreHitboxes() for plr, originalSize in pairs(originalHitboxSizes) do if plr.Character then local part = plr.Character:FindFirstChild(_G.PidorasSettings.AimbotHitbox); if part then part.Size = originalSize end end end originalHitboxSizes = {} end
-
-if not hitboxConnection then
-    hitboxConnection = RunService.Heartbeat:Connect(function()
-        if _G.PidorasSettings.HitboxEnabled then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and plr.Character then
-                    local part = plr.Character:FindFirstChild(_G.PidorasSettings.AimbotHitbox)
-                    if part then
-                        if not originalHitboxSizes[plr] then originalHitboxSizes[plr] = part.Size end
-                        local size = _G.PidorasSettings.HitboxSize
-                        part.Size = Vector3.new(size, size, size)
-                        part.Transparency = 0.5; part.CanCollide = false; part.Massless = true
-                    end
-                end
-            end
-        end
-    end)
-end
-
 local function GetClosestTarget()
     local closestTarget = nil; local shortestDist = math.huge; local fov = _G.PidorasSettings.AimbotFOV; local camPos = Camera.CFrame.Position
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
+            if _G.PidorasSettings.IgnoreTeammates and LocalPlayer.Team and plr.Team == LocalPlayer.Team then continue end
+            
             local hum = plr.Character:FindFirstChildOfClass("Humanoid"); local targetPart = plr.Character:FindFirstChild(_G.PidorasSettings.AimbotHitbox)
             if hum and hum.Health > 0 and targetPart then
                 local distToCenter = (camPos - targetPart.Position).Magnitude
@@ -448,6 +502,9 @@ RunService.RenderStepped:Connect(function()
             local hitModel = result.Instance:FindFirstAncestorOfClass("Model")
             if hitModel and hitModel:FindFirstChildOfClass("Humanoid") and hitModel ~= LocalPlayer.Character then
                 local plr = Players:GetPlayerFromCharacter(hitModel)
+                
+                if _G.PidorasSettings.IgnoreTeammates and plr and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return end
+
                 local isRealPlayer = false
                 if plr and plr.UserId > 0 then isRealPlayer = true end
                 
@@ -520,8 +577,8 @@ MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; Wate
 Watermark.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then Watermark.Visible = false; MainFrame.Visible = true; if _G.PidorasSettings.AimbotEnabled then FovCircle.Visible = true end end end)
 CloseBtn.MouseButton1Click:Connect(function() 
     for k, _ in pairs(_G.PidorasSettings) do _G.PidorasSettings[k] = false end
-    ToggleNoRecoil(false) -- Возвращаем отдачу
-    RestoreHitboxes(); ClearHighlights(); ClearNameESPs(); ClearHealthBars(); ClearItemESPs(); ClearBotESPs(); ClearCorpseESPs(); ToggleFullbright(false); pcall(ToggleOptimizer, false); Camera.FieldOfView = 70
+    ToggleNoRecoil(false)
+    ClearHighlights(); ClearNameESPs(); ClearHealthBars(); ClearItemESPs(); ClearBotESPs(); ClearCorpseESPs(); ToggleFullbright(false); pcall(ToggleOptimizer, false); Camera.FieldOfView = 70
     TargetDot.Adornee = nil; TargetDot.Enabled = false
     ScreenGui:Destroy(); _G.PidorasSettings = nil 
 end)
